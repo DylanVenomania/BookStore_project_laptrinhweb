@@ -1,0 +1,89 @@
+package com.littlelotus.controller;
+
+import com.littlelotus.model.*;
+import com.littlelotus.repository.*;
+import org.springframework.graphql.data.method.annotation.*;
+import org.springframework.stereotype.Controller;
+import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.transaction.Transactional;
+
+import java.util.List;
+
+@Controller
+public class GraphQLController 
+{
+
+ @Autowired
+ private ProductRepository productRepository;
+ @Autowired
+ private UserRepository userRepository;
+ @Autowired
+ private CategoryRepository categoryRepository;
+
+
+ // 1. Hiển thị tất cả product có giá từ thấp đến cao
+ @QueryMapping
+ public List<Product> productsByPriceAsc() {
+     return productRepository.findAllByOrderByPriceAsc();
+ }
+ 
+ // 2. Lấy tất cả product của 01 category
+ @QueryMapping
+ public List<Product> productsByCategory(@Argument Long categoryId) 
+ {
+     return productRepository.findByCategoryId(categoryId);
+ }
+ 
+ // CRUD - Read (Ví dụ cho Product)
+ @QueryMapping
+ public Product productById(@Argument Long id) {
+     return productRepository.findById(id).orElse(null);
+ }
+
+
+ 
+ @MutationMapping
+ @Transactional
+ public Product createProduct(@Argument ProductInput input) {
+     Product product = new Product();
+     product.setTitle(input.title());
+     product.setQuantity(input.quantity());
+     product.setDescription(input.description());
+     product.setPrice(input.price());
+
+     // Lấy User và Category từ ID
+     User user = userRepository.findById(input.userId())
+                               .orElseThrow(() -> new RuntimeException("User not found"));
+     Category category = categoryRepository.findById(input.categoryId())
+                                           .orElseThrow(() -> new RuntimeException("Category not found"));
+     
+     product.setUser(user);
+     product.setCategory(category);
+
+     return productRepository.save(product);
+ }
+
+ // Xóa User
+ @MutationMapping
+ public Boolean deleteUser(@Argument Long id) {
+     if (userRepository.existsById(id)) {
+         userRepository.deleteById(id);
+         return true;
+     }
+     return false;
+ }
+ 
+ // Bạn cần implement đầy đủ các hàm CRUD còn lại cho User, Product, Category tương tự.
+}
+
+//Record/Class cho Input
+public record ProductInput(
+     Long id,
+     String title,
+     Integer quantity,
+     String description,
+     Double price,
+     Long userId,
+     Long categoryId) {
+}
+//Tương tự cho UserInput và CategoryInput

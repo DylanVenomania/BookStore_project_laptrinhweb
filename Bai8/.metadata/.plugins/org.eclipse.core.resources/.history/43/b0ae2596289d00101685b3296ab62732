@@ -1,0 +1,159 @@
+package com.littlelotus.service;
+
+import com.littlelotus.input.InputRecords.*;
+import com.littlelotus.model.*;
+import com.littlelotus.repository.*;
+import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j; 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import jakarta.validation.Valid;
+
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@Slf4j // Khai báo để ghi log
+@Transactional
+public class EntityService 
+{
+    
+    @Autowired private ProductRepository productRepository;
+    @Autowired private UserRepository userRepository;
+    @Autowired private CategoryRepository categoryRepository;
+
+
+    // Đọc
+
+    public List<Product> findAllProductsByPriceAsc() 
+    {
+        return productRepository.findAllByOrderByPriceAsc();
+    }
+    
+    public List<Product> findProductsByCategory(Long categoryId) 
+    {
+        return productRepository.findByCategory_Id(categoryId);
+    }
+    
+    public Optional<User> findUserById(Long id) 
+    {
+        return userRepository.findById(id);
+    }
+    
+    public List<Product> findAllProducts() {
+        return productRepository.findAll();
+    }
+
+    public Optional<Product> findProductById(Long id) {
+        return productRepository.findById(id);
+    }
+
+    public List<User> findAllUsers() {
+        return userRepository.findAll();
+    }
+
+    public List<Category> findAllCategories() {
+        return categoryRepository.findAll();
+    }
+
+
+
+    // viết - kèm log
+
+    //Product CRUD 
+    public Product saveProduct(@Valid ProductInput input) 
+    {
+      
+        User user = userRepository.findById(input.userId())
+                                  .orElseThrow(() -> new IllegalArgumentException("User ID " + input.userId() + " không tồn tại."));
+        Category category = categoryRepository.findById(input.categoryId())
+                                              .orElseThrow(() -> new IllegalArgumentException("Category ID " + input.categoryId() + " không tồn tại."));
+        
+        Product product = input.id() != null ? productRepository.findById(input.id())
+                                              .orElseThrow(() -> new IllegalArgumentException("Product ID " + input.id() + " không tồn tại để cập nhật."))
+                                              : new Product();
+
+       
+        product.setTitle(input.title());
+        product.setQuantity(input.quantity());
+        product.setDescription(input.description());
+        product.setPrice(input.price());
+        product.setUser(user);
+        product.setCategory(category);
+        
+        // Logging
+        if (input.id() == null) 
+        {
+            log.info("ADMIN ACTION: Tạo mới Product '{}' bởi User ID: {}", input.title(), input.userId());
+        } 
+        else 
+        {
+            log.info("ADMIN ACTION: Cập nhật Product ID: {} - '{}'", input.id(), input.title());
+        }
+
+        return productRepository.save(product);
+    }
+    
+    public boolean deleteProduct(Long id) 
+    {
+        if (productRepository.existsById(id)) 
+        {
+            log.warn("ADMIN ACTION: Xóa Product ID: {}", id);
+            productRepository.deleteById(id);
+            return true;
+        }
+        return false;
+    }
+    
+    //User CRUD
+    public User saveUser(@Valid UserInput input) 
+    {
+        User user = input.id() != null ? userRepository.findById(input.id())
+                                        .orElseThrow(() -> new IllegalArgumentException("User ID " + input.id() + " không tồn tại để cập nhật."))
+                                        : new User();
+
+        user.setFullname(input.fullname());
+        user.setEmail(input.email());
+        user.setPassword(input.password()); // TODO: Implement password hashing
+        user.setPhone(input.phone());
+        
+        log.info("ADMIN ACTION: {} User '{}' (ID: {})", input.id() == null ? "Tạo mới" : "Cập nhật", input.fullname(), input.id());
+        return userRepository.save(user);
+    }
+    
+    public boolean deleteUser(Long id) 
+    {
+        if (userRepository.existsById(id)) 
+        {
+            log.warn("ADMIN ACTION: Xóa User ID: {}", id);
+            userRepository.deleteById(id);
+            return true;
+        }
+        return false;
+    }
+    
+    // Category CRUD
+    public Category saveCategory(@Valid CategoryInput input) 
+    {
+        Category category = input.id() != null ? categoryRepository.findById(input.id())
+                                                .orElseThrow(() -> new IllegalArgumentException("Category ID " + input.id() + " không tồn tại để cập nhật."))
+                                                : new Category();
+        
+        category.setName(input.name());
+        category.setImages(input.images()); 
+        
+        log.info("ADMIN ACTION: {} Category '{}' (ID: {})", input.id() == null ? "Tạo mới" : "Cập nhật", input.name(), input.id());
+        return categoryRepository.save(category);
+    }
+    
+    public boolean deleteCategory(Long id) 
+    {
+        if (categoryRepository.existsById(id)) 
+        {
+            log.warn("ADMIN ACTION: Xóa Category ID: {}", id);
+            categoryRepository.deleteById(id);
+            return true;
+        }
+        return false;
+    }
+}

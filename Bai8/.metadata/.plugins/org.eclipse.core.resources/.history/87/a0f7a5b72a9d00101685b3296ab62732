@@ -1,0 +1,242 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Quản Lý Sản Phẩm - Admin</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container my-5">
+    <h1 class="mb-4 text-primary">Quản Lý Sản Phẩm</h1>
+
+    <div id="alert-container" class="mb-3"></div>
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">Thêm Sản Phẩm Mới</div>
+        <div class="card-body">
+            <form id="createProductForm">
+                <div class="row">
+                    <div class="mb-3 col-md-6">
+                        <label for="title" class="form-label">Tên Sản Phẩm</label>
+                        <input type="text" class="form-control" id="title" name="title" required>
+                    </div>
+                    <div class="mb-3 col-md-6">
+                        <label for="price" class="form-label">Giá (VND)</label>
+                        <input type="number" class="form-control" id="price" name="price" step="0.01" required>
+                    </div>
+                    <div class="mb-3 col-md-4">
+                        <label for="quantity" class="form-label">Số Lượng</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" required>
+                    </div>
+                    <div class="mb-3 col-md-4">
+                        <label for="categoryId" class="form-label">Danh Mục (ID)</label>
+                        <select class="form-select" id="categoryId" name="categoryId" required>
+                            <option value="1">Sách Khoa Học</option> 
+                        </select>
+                    </div>
+                    <div class="mb-3 col-md-4">
+                        <label for="userId" class="form-label">Người Đăng (ID)</label>
+                        <select class="form-select" id="userId" name="userId" required>
+                            <option value="1">Admin Little Lotus</option>
+                        </select>
+                    </div>
+                    <div class="mb-3 col-12">
+                        <label for="description" class="form-label">Mô Tả</label>
+                        <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success mt-2">Thêm Sản Phẩm</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white">Danh Sách Sản Phẩm</div>
+        <div class="card-body">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Tên Sản Phẩm</th>
+                        <th>Giá</th>
+                        <th>SL</th>
+                        <th>Danh Mục</th>
+                        <th>Hành Động</th>
+                    </tr>
+                </thead>
+                <tbody id="product-table-body">
+                    <tr><td colspan="6" class="text-center">Đang tải dữ liệu...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const GRAPHQL_ENDPOINT = '/graphql';
+    
+    // bảng hiển thị
+    function fetchAndRenderProducts() {
+        const query = `{ productsByPriceAsc { id title price quantity category { name } } }`;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: query }),
+            success: function(response) {
+                const products = response.data?.productsByPriceAsc || [];
+                let html = '';
+                
+                if (products.length === 0) 
+                {
+                    html = '<tr><td colspan="6" class="text-center">Không có sản phẩm nào.</td></tr>';
+                } 
+                else 
+                {
+                    products.forEach(p => 
+                    {
+                        const price = Number(p.price).toLocaleString('vi-VN');
+                        html += `
+                            <tr>
+                                <td>${p.id}</td>
+                                <td>${p.title}</td>
+                                <td>${price} VND</td>
+                                <td>${p.quantity}</td>
+                                <td>${p.category.name}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-warning edit-btn" data-id="${p.id}">Sửa</button>
+                                    <button class="btn btn-sm btn-danger delete-btn" data-id="${p.id}">Xóa</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+                $('#product-table-body').html(html);
+            },
+            error: function(xhr) 
+            {
+                console.error("Lỗi khi tải danh sách sản phẩm:", xhr.responseText);
+                $('#product-table-body').html('<tr><td colspan="6" class="text-danger text-center">Lỗi tải dữ liệu.</td></tr>');
+            }
+        });
+    }
+    
+    // --- HÀM THÔNG BÁO ---
+    function showNotification(message, type = 'success') 
+    {
+        const alertHtml = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>`;
+        $('#alert-container').html(alertHtml);
+        setTimeout(() => $('#alert-container').empty(), 5000);
+    }
+
+    // xử lý thêm mới
+    $('#createProductForm').submit(function(e) 
+    		{
+        e.preventDefault();
+
+        const inputData = {
+            title: $('#title').val(),
+            price: parseFloat($('#price').val()),
+            quantity: parseInt($('#quantity').val()),
+            description: $('#description').val(),
+            categoryId: parseInt($('#categoryId').val()),
+            userId: parseInt($('#userId').val())
+        };
+        
+ 
+        const mutation = `
+            mutation CreateProduct($input: ProductInput!) 
+        {
+                createProduct(input: $input) 
+                {
+                    id
+                    title
+                }
+            }
+        `;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify
+            ({ 
+                query: mutation,
+                variables: { input: inputData } 
+            }),
+            success: function(response) 
+            {
+                if (response.errors) 
+                {
+                    const validationError = response.errors[0].message;
+                    showNotification('Lỗi Validation: ' + validationError, 'danger');
+                    console.error("Lỗi GraphQL:", response.errors);
+                    return;
+                }
+                showNotification(`Thêm sản phẩm "${response.data.createProduct.title}" thành công!`);
+                $('#createProductForm')[0].reset(); 
+                fetchAndRenderProducts(); 
+            },
+            error: function(xhr) 
+            {
+                showNotification('Lỗi khi thêm sản phẩm. Kiểm tra console.', 'danger');
+                console.error("Lỗi AJAX:", xhr.responseText);
+            }
+        });
+    });
+
+    // xử lý xoá
+    $(document).on('click', '.delete-btn', function() 
+    		{
+        const productId = $(this).data('id');
+        if (!confirm(`Bạn có chắc chắn muốn xóa Sản phẩm ID: ${productId} không?`)) return;
+
+       
+        const mutation = `
+            mutation DeleteProduct($id: ID!) {
+                deleteProduct(id: $id)
+            }
+        `;
+
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ 
+                query: mutation,
+                variables: { id: productId } 
+            }),
+            success: function(response) 
+            {
+                if (response.data && response.data.deleteProduct === true) 
+                {
+                    showNotification(`Xóa sản phẩm ID: ${productId} thành công.`);
+                    fetchAndRenderProducts(); 
+                } else {
+                    showNotification(`Không tìm thấy hoặc không thể xóa sản phẩm ID: ${productId}.`, 'warning');
+                }
+            },
+            error: function(xhr) {
+                showNotification('Lỗi khi xóa sản phẩm. Kiểm tra console.', 'danger');
+            }
+        });
+    });
+
+    
+    $(function() 
+    		{
+        fetchAndRenderProducts();
+        
+    });
+
+</script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+package com.littlelotus.controller;
+
+import com.littlelotus.input.InputRecords.*;
+import com.littlelotus.model.Product;
+import com.littlelotus.model.User;
+import com.littlelotus.model.Category;
+import com.littlelotus.service.EntityService;
+import org.springframework.graphql.data.method.annotation.*;
+import org.springframework.stereotype.Controller;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.validation.annotation.Validated;
+
+import java.util.List;
+
+@Controller
+@Validated // Kích hoạt Validation trên Controller
+public class GraphQLController 
+{
+
+    @Autowired
+    private EntityService entityService;
+
+    // READ)
+    
+    @QueryMapping
+    public List<Product> productsByPriceAsc() {
+        return entityService.findAllProductsByPriceAsc();
+    }
+    
+    @QueryMapping
+    public List<Product> productsByCategory(@Argument Long categoryId) {
+        return entityService.findProductsByCategory(categoryId);
+    }
+
+    
+    @QueryMapping
+    public User userById(@Argument Long id) {
+        return entityService.findUserById(id).orElse(null);
+    }
+    
+    @QueryMapping
+    public List<Product> allProducts() {
+        return entityService.findAllProducts();
+    }
+
+    @QueryMapping
+    public Product productById(@Argument Long id) {
+        return entityService.findProductById(id).orElse(null);
+    }
+
+    @QueryMapping
+    public List<Category> allCategories() {
+        return entityService.findAllCategories();
+    }
+
+    @QueryMapping
+    public Category categoryById(@Argument Long id) {
+        return entityService.findCategoryById(id).orElse(null); 
+    }
+
+    @QueryMapping
+    public List<User> allUsers() {
+        return entityService.findAllUsers();
+    }
+
+
+    // (WRITE)
+    
+    // --- Product ---
+    @MutationMapping
+    public Product createProduct(@Argument ProductInput input) {
+        return entityService.saveProduct(input);
+    }
+    
+    @MutationMapping
+    public Product updateProduct(@Argument ProductInput input) {
+        return entityService.saveProduct(input); 
+    }
+    
+    @MutationMapping
+    public Boolean deleteProduct(@Argument Long id) {
+        return entityService.deleteProduct(id);
+    }
+    
+    // --- User ---
+    @MutationMapping
+    public User createUser(@Argument UserInput input) {
+        return entityService.saveUser(input);
+    }
+    
+    @MutationMapping
+    public User updateUser(@Argument UserInput input) {
+        return entityService.saveUser(input);
+    }
+    
+    @MutationMapping
+    public Boolean deleteUser(@Argument Long id) {
+        return entityService.deleteUser(id);
+    }
+    
+    // --- Category ---
+    @MutationMapping
+    public Category createCategory(@Argument CategoryInput input) {
+        return entityService.saveCategory(input);
+    }
+    
+    @MutationMapping
+    public Category updateCategory(@Argument CategoryInput input) {
+        return entityService.saveCategory(input);
+    }
+    
+    @MutationMapping
+    public Boolean deleteCategory(@Argument Long id) {
+        return entityService.deleteCategory(id);
+    }
+}

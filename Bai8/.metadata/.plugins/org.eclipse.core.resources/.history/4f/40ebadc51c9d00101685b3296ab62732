@@ -1,0 +1,14 @@
+spring.application.name=LittleLotus
+# Cấu hình Database
+spring.datasource.url=jdbc:sqlserver://localhost:1433;databaseName=LittleLotusBookStoreDB
+spring.datasource.username=sa
+spring.datasource.password=123456789
+spring.datasource.driver-class-name=com.microsoft.sqlserver.jdbc.SQLServerDriver
+
+# Cấu hình JPA/Hibernate
+
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.SQLServer2016Dialect
+
+#tự động tạo bảng
+spring.jpa.hibernate.ddl-auto=update 
+spring.jpa.show-sql=true

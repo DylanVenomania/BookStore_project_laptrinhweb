@@ -1,0 +1,259 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+
+<div class="container my-5">
+    <div id="alert-container" class="mb-3"></div>
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white" id="form-header">Thêm Danh Mục Mới</div>
+        <div class="card-body">
+            <form id="categoryForm">
+                <input type="hidden" id="categoryId" name="categoryId" value=""> 
+                <div class="row">
+                    <div class="mb-3 col-md-6">
+                        <label for="name" class="form-label">Tên Danh Mục</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3 col-md-6">
+                        <label for="images" class="form-label">URL Hình Ảnh (Tùy chọn)</label>
+                        <input type="text" class="form-control" id="images" name="images">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success mt-2" id="submit-btn">Thêm Danh Mục</button>
+                <button type="button" class="btn btn-secondary mt-2 d-none" id="cancel-edit-btn">Hủy Bỏ</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header">Danh Sách Danh Mục</div>
+        <div class="card-body">
+            <table class="table table-bordered table-hover" id="categoryTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Tên Danh Mục</th>
+                        <th>Hình Ảnh</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody id="categoryTableBody">
+                    <tr><td colspan="4" class="text-center">Đang tải dữ liệu...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+
+<script>
+    // URL API GraphQL chung cho toàn bộ dự án
+    const GRAPHQL_ENDPOINT = '/graphql'; 
+
+    // Hàm hiển thị thông báo
+    function showNotification(message, type) {
+        const alertHtml = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                              ${message}
+                              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                           </div>`;
+        $('#alert-container').html(alertHtml);
+        $('html, body').animate({ scrollTop: 0 }, 500);
+    }
+    
+    // Hàm chuẩn bị dữ liệu cho Mutation
+    function getCategoryInputData() {
+        const id = $('#categoryId').val() ? parseInt($('#categoryId').val()) : null;
+        return {
+            id: id,
+            name: $('#name').val(),
+            images: $('#images').val()
+        };
+    }
+
+    // --- 1. READ: LẤY TẤT CẢ DANH MỤC ---
+    function fetchAllCategories() {
+        // GraphQL Query: Chỉ lấy id và name
+        const query = `{
+            allCategories {
+                id
+                name
+                images
+            }
+        }`;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: query }),
+            success: function(response) {
+                const categories = response.data?.allCategories || [];
+                renderCategoryTable(categories);
+            },
+            error: function(xhr) {
+                console.error("Lỗi khi tải danh mục:", xhr.responseText);
+                $('#categoryTableBody').html('<tr><td colspan="4" class="text-center text-danger">Lỗi khi tải dữ liệu danh mục.</td></tr>');
+            }
+        });
+    }
+
+    // Hàm render bảng
+    function renderCategoryTable(categories) {
+        let html = '';
+        if (categories.length === 0) {
+            html = '<tr><td colspan="4" class="text-center">Chưa có danh mục nào.</td></tr>';
+        } else {
+            categories.forEach(cat => {
+                // Tạo một đối tượng JSON string để truyền vào data-category
+                const categoryJson = JSON.stringify(cat).replace(/"/g, '&quot;');
+                
+                html += `
+                    <tr>
+                        <td>${cat.id}</td>
+                        <td>${cat.name}</td>
+                        <td>${cat.images || 'N/A'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning edit-btn me-2" data-category="${categoryJson}">Sửa</button>
+                            <button class="btn btn-sm btn-danger delete-btn" data-id="${cat.id}">Xóa</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+        $('#categoryTableBody').html(html);
+    }
+    
+    // --- 2. CREATE/UPDATE: XỬ LÝ FORM SUBMISSION ---
+    $('#categoryForm').submit(function(e) {
+        e.preventDefault();
+        
+        const inputData = getCategoryInputData();
+        const isUpdate = inputData.id !== null;
+        let mutation, operationName;
+
+        if (isUpdate) {
+            // GraphQL Mutation cho UPDATE
+            mutation = `
+                mutation UpdateCategory($input: CategoryInput!) {
+                    updateCategory(input: $input) {
+                        id
+                        name
+                    }
+                }
+            `;
+            operationName = "UpdateCategory";
+        } else {
+            // GraphQL Mutation cho CREATE
+            mutation = `
+                mutation CreateCategory($input: CategoryInput!) {
+                    createCategory(input: $input) {
+                        id
+                        name
+                    }
+                }
+            `;
+            operationName = "CreateCategory";
+            // Đối với CREATE, không cần truyền ID
+            delete inputData.id;
+        }
+
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                query: mutation,
+                variables: { input: inputData },
+                operationName: operationName
+            }),
+            success: function(response) {
+                if (response.errors) {
+                    // Xử lý lỗi validation từ GraphQL (nếu có)
+                    const errorMsg = response.errors[0]?.message || 'Lỗi không xác định trong quá trình xử lý.';
+                    showNotification(errorMsg, 'danger');
+                    console.error("GraphQL Errors:", response.errors);
+                    return;
+                }
+                
+                showNotification(`Danh mục ${isUpdate ? 'cập nhật' : 'thêm mới'} thành công!`, 'success');
+                resetFormState();
+                fetchAllCategories(); // Tải lại dữ liệu
+            },
+            error: function(xhr) {
+                showNotification('Lỗi khi gửi yêu cầu. Kiểm tra kết nối API.', 'danger');
+                console.error("AJAX Error:", xhr.responseText);
+            }
+        });
+    });
+
+    // --- 3. DELETE: XỬ LÝ XÓA DANH MỤC ---
+    $(document).on('click', '.delete-btn', function() {
+        const categoryId = parseInt($(this).data('id'));
+        if (!confirm('Bạn có chắc chắn muốn xóa danh mục ID: ' + categoryId + ' không?')) {
+            return;
+        }
+
+        // GraphQL Mutation cho DELETE
+        const mutation = `
+            mutation DeleteCategory($id: Long!) {
+                deleteCategory(id: $id)
+            }
+        `;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                query: mutation,
+                variables: { id: categoryId },
+                operationName: "DeleteCategory"
+            }),
+            success: function(response) {
+                 // deleteCategory trả về Boolean, nếu true là xóa thành công
+                if (response.data?.deleteCategory === true) {
+                    showNotification(`Đã xóa danh mục ID: ${categoryId} thành công.`, 'success');
+                    fetchAllCategories(); // Tải lại dữ liệu
+                } else {
+                    showNotification(`Không tìm thấy hoặc không thể xóa danh mục ID: ${categoryId}.`, 'warning');
+                }
+            },
+            error: function(xhr) {
+                showNotification('Lỗi khi xóa danh mục. Kiểm tra console.', 'danger');
+            }
+        });
+    });
+
+    // --- XỬ LÝ SỬA (EDIT) ---
+    $(document).on('click', '.edit-btn', function() {
+        // Dữ liệu được lấy từ data-category đã mã hóa JSON
+        const categoryData = $(this).data('category'); 
+        
+        $('#categoryId').val(categoryData.id);
+        $('#name').val(categoryData.name);
+        $('#images').val(categoryData.images);
+        
+        $('#form-header').text('Cập Nhật Danh Mục (ID: ' + categoryData.id + ')');
+        $('#submit-btn').text('Cập Nhật Danh Mục').removeClass('btn-success').addClass('btn-warning');
+        $('#cancel-edit-btn').removeClass('d-none');
+        
+        $('html, body').animate({ scrollTop: 0 }, 500);
+    });
+
+    // --- RESET TRẠNG THÁI FORM ---
+    $('#cancel-edit-btn').click(function() { resetFormState(); });
+    function resetFormState() {
+        $('#categoryForm')[0].reset();
+        $('#categoryId').val('');
+        $('#form-header').text('Thêm Danh Mục Mới');
+        $('#submit-btn').text('Thêm Danh Mục').removeClass('btn-warning').addClass('btn-success');
+        $('#cancel-edit-btn').addClass('d-none');
+        $('#alert-container').empty(); // Xóa thông báo khi reset form
+    }
+
+    // --- KHỞI TẠO ---
+    $(function() {
+        fetchAllCategories();
+    });
+
+</script>

@@ -1,0 +1,94 @@
+package com.littlelotus.controller;
+
+import com.littlelotus.input.InputRecords.*;
+import com.littlelotus.model.Product;
+import com.littlelotus.model.User;
+import com.littlelotus.model.Category;
+import com.littlelotus.service.EntityService;
+import org.springframework.stereotype.Controller;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.validation.annotation.Validated;
+
+import java.util.List;
+
+@Controller
+@Validated // Kích hoạt Validation trên Controller
+public class GraphQLController 
+{
+
+    @Autowired
+    private EntityService entityService;
+
+    // =======================================================
+    // QUERY (READ)
+    // =======================================================
+    
+    @QueryMapping
+    public List<Product> productsByPriceAsc() {
+        return entityService.findAllProductsByPriceAsc();
+    }
+    
+    @QueryMapping
+    public List<Product> productsByCategory(@Argument Long categoryId) {
+        return entityService.findProductsByCategory(categoryId);
+    }
+
+    // CRUD Read - Ví dụ
+    @QueryMapping
+    public User userById(@Argument Long id) {
+        return entityService.findUserById(id).orElse(null);
+    }
+    // ... Bổ sung các Query Read khác ...
+
+    // =======================================================
+    // MUTATION (WRITE)
+    // =======================================================
+    
+    // --- Product ---
+    @MutationMapping
+    public Product createProduct(@Argument ProductInput input) {
+        return entityService.saveProduct(input);
+    }
+    
+    @MutationMapping
+    public Product updateProduct(@Argument ProductInput input) {
+        return entityService.saveProduct(input); // Sử dụng lại hàm saveProduct
+    }
+    
+    @MutationMapping
+    public Boolean deleteProduct(@Argument Long id) {
+        return entityService.deleteProduct(id);
+    }
+    
+    // --- User ---
+    @MutationMapping
+    public User createUser(@Argument UserInput input) {
+        return entityService.saveUser(input);
+    }
+    
+    @MutationMapping
+    public User updateUser(@Argument UserInput input) {
+        return entityService.saveUser(input);
+    }
+    
+    @MutationMapping
+    public Boolean deleteUser(@Argument Long id) {
+        return entityService.deleteUser(id);
+    }
+    
+    // --- Category ---
+    @MutationMapping
+    public Category createCategory(@Argument CategoryInput input) {
+        return entityService.saveCategory(input);
+    }
+    
+    @MutationMapping
+    public Category updateCategory(@Argument CategoryInput input) {
+        return entityService.saveCategory(input);
+    }
+    
+    @MutationMapping
+    public Boolean deleteCategory(@Argument Long id) {
+        return entityService.deleteCategory(id);
+    }
+}

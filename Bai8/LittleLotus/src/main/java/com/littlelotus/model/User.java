@@ -1,0 +1,41 @@
+package com.littlelotus.model;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
+import lombok.*;
+import java.util.Set;
+
+@Entity
+@Table(name = "app_user") 
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class User {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @NotBlank(message = "Họ tên không được để trống")
+    @Size(max = 100, message = "Họ tên tối đa 100 ký tự")
+    @Column(nullable = false, length = 100)
+    private String fullname;
+
+    @Email(message = "Email không hợp lệ")
+    @NotBlank(message = "Email không được để trống")
+    @Column(nullable = false, unique = true, length = 100)
+    private String email;
+
+    @NotBlank(message = "Mật khẩu không được để trống")
+    @Column(nullable = false)
+    private String password;
+
+    @Pattern(regexp = "^\\d{10,11}$", message = "Số điện thoại không hợp lệ")
+    private String phone;
+    
+    @ManyToMany(mappedBy = "users")
+    private Set<Category> categories;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Product> products;
+}

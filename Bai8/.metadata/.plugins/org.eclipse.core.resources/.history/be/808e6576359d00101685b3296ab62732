@@ -1,0 +1,228 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+
+<div class="container my-5">
+    <div id="alert-container" class="mb-3"></div>
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white" id="form-header">Thêm Danh Mục Mới</div>
+        <div class="card-body">
+            <form id="categoryForm">
+                <input type="hidden" id="categoryId" name="categoryId" value=""> 
+                <div class="row">
+                    <div class="mb-3 col-md-6">
+                        <label for="name" class="form-label">Tên Danh Mục</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3 col-md-6">
+                        <label for="images" class="form-label">URL Hình Ảnh (Tùy chọn)</label>
+                        <input type="text" class="form-control" id="images" name="images">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success mt-2" id="submit-btn">Thêm Danh Mục</button>
+                <button type="button" class="btn btn-secondary mt-2 d-none" id="cancel-edit-btn">Hủy Bỏ</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white">Danh Sách Danh Mục</div>
+        <div class="card-body">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Tên Danh Mục</th>
+                        <th>Ảnh (URL)</th>
+                        <th>Hành Động</th>
+                    </tr>
+                </thead>
+                <tbody id="category-table-body">
+                    <tr><td colspan="4" class="text-center">Đang tải dữ liệu...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const GRAPHQL_ENDPOINT = '/graphql';
+    
+    function showNotification(message, type = 'success') 
+    {
+        const alertHtml = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>`;
+        $('#alert-container').html(alertHtml);
+        setTimeout(() => $('#alert-container').empty(), 5000);
+    }
+
+    // --- BẢNG HIỂN THỊ (READ) ---
+    function fetchAndRenderCategories() {
+        const query = `{ allCategories { id name images } }`;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: query }),
+            success: function(response) {
+                const categories = response.data?.allCategories || [];
+                let html = '';
+                
+                if (categories.length === 0) 
+                {
+                    html = '<tr><td colspan="4" class="text-center">Không có danh mục nào.</td></tr>';
+                } 
+                else 
+                {
+                    categories.forEach(c => 
+                    {
+                        const categoryDataJson = JSON.stringify({ id: c.id, name: c.name, images: c.images });
+
+                        html += `
+                            <tr>
+                                <td>${c.id}</td>
+                                <td>${c.name}</td>
+                                <td><span class="text-muted small">${c.images || "N/A"}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-warning edit-btn me-1" data-category='${categoryDataJson}'>Sửa</button>
+                                    <button class="btn btn-sm btn-danger delete-btn" data-id="${c.id}">Xóa</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+                $('#category-table-body').html(html);
+            },
+            error: function(xhr) 
+            {
+                console.error("Lỗi khi tải danh mục:", xhr.responseText);
+                $('#category-table-body').html('<tr><td colspan="4" class="text-danger text-center">Lỗi tải dữ liệu.</td></tr>');
+            }
+        });
+    }
+    
+    // --- XỬ LÝ CREATE VÀ UPDATE (Đã sửa lỗi Validation/Constraint) ---
+    $('#categoryForm').submit(function(e) 
+    {
+        e.preventDefault();
+        
+        const categoryId = $('#categoryId').val();
+        const isUpdating = categoryId !== ""; 
+
+        const inputData = {
+            id: isUpdating ? Number(categoryId) : null,
+            name: $('#name').val(),
+            // FIX: Sử dụng || null để biến chuỗi rỗng thành null, tránh lỗi NOT NULL/Validation
+            images: $('#images').val() || null 
+        };
+        
+        const operationName = isUpdating ? 'UpdateCategory' : 'CreateCategory';
+        const mutation = `
+            mutation ${operationName}($input: CategoryInput!) 
+            {
+                ${operationName.toLowerCase()}(input: $input) 
+                {
+                    id
+                    name
+                }
+            }
+        `;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: mutation, variables: { input: inputData } }),
+            success: function(response) 
+            {
+                if (response.errors) 
+                {
+                    const validationError = response.errors[0].message || "Lỗi không xác định";
+                    showNotification('Lỗi Validation: ' + validationError, 'danger');
+                    console.error("Lỗi GraphQL:", response.errors);
+                    return;
+                }
+                
+                const successMsg = isUpdating ? "Cập nhật danh mục" : "Thêm danh mục";
+                showNotification(`${successMsg} "${response.data[operationName.toLowerCase()].name}" thành công!`);
+                
+                resetFormState();
+                fetchAndRenderCategories(); 
+            },
+            error: function(xhr) 
+            {
+                showNotification('Lỗi khi thực hiện thao tác. Kiểm tra console.', 'danger');
+                console.error("Lỗi AJAX:", xhr.responseText);
+            }
+        });
+    });
+
+    // --- XỬ LÝ XÓA (DELETE) ---
+    $(document).on('click', '.delete-btn', function() 
+    {
+        const categoryId = $(this).data('id');
+        if (!confirm(`Bạn có chắc chắn muốn xóa Danh mục ID: ${categoryId} không?`)) return;
+
+       
+        const mutation = `
+            mutation DeleteCategory($id: ID!) {
+                deleteCategory(id: $id)
+            }
+        `;
+
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: mutation, variables: { id: categoryId.toString() } }),
+            success: function(response) 
+            {
+                if (response.data && response.data.deleteCategory === true) 
+                {
+                    showNotification(`Xóa danh mục ID: ${categoryId} thành công.`);
+                    fetchAndRenderCategories(); 
+                } else {
+                    showNotification(`Không tìm thấy hoặc không thể xóa danh mục ID: ${categoryId}.`, 'warning');
+                }
+            },
+            error: function(xhr) {
+                showNotification('Lỗi khi xóa danh mục. Kiểm tra console.', 'danger');
+            }
+        });
+    });
+
+    // --- XỬ LÝ SỬA (EDIT) ---
+    $(document).on('click', '.edit-btn', function() {
+        const categoryData = $(this).data('category');
+        
+        $('#categoryId').val(categoryData.id);
+        $('#name').val(categoryData.name);
+        $('#images').val(categoryData.images);
+        
+        $('#form-header').text('Cập Nhật Danh Mục (ID: ' + categoryData.id + ')');
+        $('#submit-btn').text('Cập Nhật Danh Mục').removeClass('btn-success').addClass('btn-warning');
+        $('#cancel-edit-btn').removeClass('d-none');
+        
+        $('html, body').animate({ scrollTop: 0 }, 500);
+    });
+
+    // --- RESET TRẠNG THÁI FORM ---
+    $('#cancel-edit-btn').click(function() { resetFormState(); });
+    function resetFormState() {
+        $('#categoryForm')[0].reset();
+        $('#categoryId').val('');
+        $('#form-header').text('Thêm Danh Mục Mới');
+        $('#submit-btn').text('Thêm Danh Mục').removeClass('btn-warning').addClass('btn-success');
+        $('#cancel-edit-btn').addClass('d-none');
+    }
+    
+    // --- KHỞI TẠO ---
+    $(function() 
+    {
+        fetchAndRenderCategories();
+    });
+
+</script>

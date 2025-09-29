@@ -1,0 +1,262 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Quản Lý Người Dùng - Admin</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body class="bg-light">
+
+<div class="container my-5">
+    <h1 class="mb-4 text-primary">Quản Lý Người Dùng</h1>
+
+    <div id="alert-container" class="mb-3"></div>
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white" id="form-header">Thêm Người Dùng Mới</div>
+        <div class="card-body">
+            <form id="userForm">
+                <input type="hidden" id="userId" name="userId" value=""> 
+                <div class="row">
+                    <div class="mb-3 col-md-6">
+                        <label for="fullname" class="form-label">Họ và Tên</label>
+                        <input type="text" class="form-control" id="fullname" name="fullname" required>
+                    </div>
+                    <div class="mb-3 col-md-6">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <div class="mb-3 col-md-6">
+                        <label for="password" class="form-label">Mật khẩu</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="mb-3 col-md-6">
+                        <label for="phone" class="form-label">Số điện thoại</label>
+                        <input type="text" class="form-control" id="phone" name="phone">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success mt-2" id="submit-btn">Thêm Người Dùng</button>
+                <button type="button" class="btn btn-secondary mt-2 d-none" id="cancel-edit-btn">Hủy Bỏ</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white">Danh Sách Người Dùng</div>
+        <div class="card-body">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Họ và Tên</th>
+                        <th>Email</th>
+                        <th>SĐT</th>
+                        <th>Hành Động</th>
+                    </tr>
+                </thead>
+                <tbody id="user-table-body">
+                    <tr><td colspan="5" class="text-center">Đang tải dữ liệu...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const GRAPHQL_ENDPOINT = '/graphql';
+    
+    function showNotification(message, type = 'success') 
+    {
+        const alertHtml = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>`;
+        $('#alert-container').html(alertHtml);
+        setTimeout(() => $('#alert-container').empty(), 5000);
+    }
+
+    // --- BẢNG HIỂN THỊ (READ) ---
+    function fetchAndRenderUsers() {
+        const query = `{ allUsers { id fullname email phone } }`;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: query }),
+            success: function(response) {
+                const users = response.data?.allUsers || [];
+                let html = '';
+                
+                if (users.length === 0) 
+                {
+                    html = '<tr><td colspan="5" class="text-center">Không có người dùng nào.</td></tr>';
+                } 
+                else 
+                {
+                    users.forEach(u => 
+                    {
+                        // Không truyền mật khẩu vào data-user
+                        const userDataJson = JSON.stringify({ id: u.id, fullname: u.fullname, email: u.email, phone: u.phone });
+
+                        html += `
+                            <tr>
+                                <td>${u.id}</td>
+                                <td>${u.fullname}</td>
+                                <td>${u.email}</td>
+                                <td>${u.phone || "N/A"}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-warning edit-btn me-1" data-user='${userDataJson}'>Sửa</button>
+                                    <button class="btn btn-sm btn-danger delete-btn" data-id="${u.id}">Xóa</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+                $('#user-table-body').html(html);
+            },
+            error: function(xhr) 
+            {
+                console.error("Lỗi khi tải người dùng:", xhr.responseText);
+                $('#user-table-body').html('<tr><td colspan="5" class="text-danger text-center">Lỗi tải dữ liệu.</td></tr>');
+            }
+        });
+    }
+    
+    // --- XỬ LÝ CREATE VÀ UPDATE ---
+    $('#userForm').submit(function(e) 
+    {
+        e.preventDefault();
+        
+        const userId = $('#userId').val();
+        const isUpdating = userId !== ""; 
+
+        const inputData = {
+            id: isUpdating ? Number(userId) : null,
+            fullname: $('#fullname').val(),
+            email: $('#email').val(),
+            // Cảnh báo: Việc lấy mật khẩu từ trường input 'password' này là không an toàn 
+            // và nên được xử lý hashing/encryption ở Backend
+            password: $('#password').val(), 
+            phone: $('#phone').val()
+        };
+        
+        const operationName = isUpdating ? 'UpdateUser' : 'CreateUser';
+        const mutation = `
+            mutation ${operationName}($input: UserInput!) 
+            {
+                ${operationName.toLowerCase()}(input: $input) 
+                {
+                    id
+                    fullname
+                }
+            }
+        `;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: mutation, variables: { input: inputData } }),
+            success: function(response) 
+            {
+                if (response.errors) 
+                {
+                    const validationError = response.errors[0].message || "Lỗi không xác định";
+                    showNotification('Lỗi Validation: ' + validationError, 'danger');
+                    console.error("Lỗi GraphQL:", response.errors);
+                    return;
+                }
+                
+                const successMsg = isUpdating ? "Cập nhật người dùng" : "Thêm người dùng";
+                showNotification(`${successMsg} "${response.data[operationName.toLowerCase()].fullname}" thành công!`);
+                
+                resetFormState();
+                fetchAndRenderUsers(); 
+            },
+            error: function(xhr) 
+            {
+                showNotification('Lỗi khi thực hiện thao tác. Kiểm tra console.', 'danger');
+                console.error("Lỗi AJAX:", xhr.responseText);
+            }
+        });
+    });
+
+    // --- XỬ LÝ XÓA (DELETE) ---
+    $(document).on('click', '.delete-btn', function() 
+    {
+        const userId = $(this).data('id');
+        if (!confirm(`Bạn có chắc chắn muốn xóa Người dùng ID: ${userId} không?`)) return;
+
+       
+        const mutation = `
+            mutation DeleteUser($id: ID!) {
+                deleteUser(id: $id)
+            }
+        `;
+
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: mutation, variables: { id: userId.toString() } }),
+            success: function(response) 
+            {
+                if (response.data && response.data.deleteUser === true) 
+                {
+                    showNotification(`Xóa người dùng ID: ${userId} thành công.`);
+                    fetchAndRenderUsers(); 
+                } else {
+                    showNotification(`Không tìm thấy hoặc không thể xóa người dùng ID: ${userId}.`, 'warning');
+                }
+            },
+            error: function(xhr) {
+                showNotification('Lỗi khi xóa người dùng. Kiểm tra console.', 'danger');
+            }
+        });
+    });
+
+    // --- XỬ LÝ SỬA (EDIT) ---
+    $(document).on('click', '.edit-btn', function() {
+        const userData = $(this).data('user');
+        
+        // Điền dữ liệu vào form
+        $('#userId').val(userData.id);
+        $('#fullname').val(userData.fullname);
+        $('#email').val(userData.email);
+        $('#phone').val(userData.phone);
+        // Lưu ý: Không điền mật khẩu cũ, yêu cầu nhập lại khi sửa
+        $('#password').val('').attr('placeholder', 'Nhập mật khẩu mới (Nếu cần)');
+        
+        // Cập nhật giao diện Form
+        $('#form-header').text('Cập Nhật Người Dùng (ID: ' + userData.id + ')');
+        $('#submit-btn').text('Cập Nhật Người Dùng').removeClass('btn-success').addClass('btn-warning');
+        $('#cancel-edit-btn').removeClass('d-none');
+        
+        $('html, body').animate({ scrollTop: 0 }, 500);
+    });
+
+    // --- RESET TRẠNG THÁI FORM ---
+    $('#cancel-edit-btn').click(function() { resetFormState(); });
+    function resetFormState() {
+        $('#userForm')[0].reset();
+        $('#userId').val('');
+        $('#form-header').text('Thêm Người Dùng Mới');
+        $('#password').val('').removeAttr('placeholder'); // Xóa placeholder
+        $('#submit-btn').text('Thêm Người Dùng').removeClass('btn-warning').addClass('btn-success');
+        $('#cancel-edit-btn').addClass('d-none');
+    }
+    
+    // --- KHỞI TẠO ---
+    $(function() 
+    {
+        fetchAndRenderUsers();
+    });
+
+</script>
+</body>
+</html>

@@ -1,0 +1,365 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Quản Lý Sản Phẩm - Admin</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body class="bg-light">
+
+<div class="container my-5">
+    <h1 class="mb-4 text-primary">Quản Lý Sản Phẩm</h1>
+
+    <div id="alert-container" class="mb-3"></div>
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white" id="form-header">Thêm Sản Phẩm Mới</div>
+        <div class="card-body">
+            <form id="productForm">
+                <input type="hidden" id="productId" name="productId" value=""> 
+                <div class="row">
+                    <div class="mb-3 col-md-6">
+                        <label for="title" class="form-label">Tên Sản Phẩm</label>
+                        <input type="text" class="form-control" id="title" name="title" required>
+                    </div>
+                    <div class="mb-3 col-md-6">
+                        <label for="price" class="form-label">Giá (VND)</label>
+                        <input type="number" class="form-control" id="price" name="price" step="0.01" required>
+                    </div>
+                    <div class="mb-3 col-md-4">
+                        <label for="quantity" class="form-label">Số Lượng</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" required>
+                    </div>
+                    <div class="mb-3 col-md-4">
+                        <label for="categoryId" class="form-label">Danh Mục</label>
+                        <select class="form-select" id="categoryId" name="categoryId" required>
+                            <option value="">Đang tải...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3 col-md-4">
+                        <label for="userId" class="form-label">Người Đăng</label>
+                        <select class="form-select" id="userId" name="userId" required>
+                            <option value="">Đang tải...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3 col-12">
+                        <label for="description" class="form-label">Mô Tả</label>
+                        <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success mt-2" id="submit-btn">Thêm Sản Phẩm</button>
+                <button type="button" class="btn btn-secondary mt-2 d-none" id="cancel-edit-btn">Hủy Bỏ</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white">Danh Sách Sản Phẩm</div>
+        <div class="card-body">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Tên Sản Phẩm</th>
+                        <th>Giá</th>
+                        <th>SL</th>
+                        <th>Danh Mục</th>
+                        <th>Hành Động</th>
+                    </tr>
+                </thead>
+                <tbody id="product-table-body">
+                    <tr><td colspan="6" class="text-center">Đang tải dữ liệu...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const GRAPHQL_ENDPOINT = '/graphql';
+    
+    // --- HÀM THÔNG BÁO ---
+    function showNotification(message, type = 'success') 
+    {
+        const alertHtml = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>`;
+        $('#alert-container').html(alertHtml);
+        setTimeout(() => $('#alert-container').empty(), 5000);
+    }
+
+    // --- TẢI CATEGORIES ĐỘNG ---
+    function fetchCategories() {
+        const query = `{ allCategories { id name } }`;
+
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: query }),
+            success: function(response) {
+                const categories = response.data?.allCategories || [];
+                const $dropdown = $('#categoryId');
+                $dropdown.empty();
+
+                if (categories.length > 0) {
+                    categories.forEach(c => {
+                        $dropdown.append(`<option value="${c.id}">${c.name} (ID: ${c.id})</option>`);
+                    });
+                } else {
+                    $dropdown.append('<option value="">Chưa có Danh mục nào</option>');
+                }
+            },
+            error: function(xhr) {
+                console.error("Lỗi khi tải danh mục:", xhr.responseText);
+                $('#categoryId').empty().append('<option value="">Lỗi tải danh mục</option>');
+            }
+        });
+    }
+
+    // --- TẢI USERS ĐỘNG ---
+    function fetchUsers() {
+        const query = `{ allUsers { id fullname } }`;
+
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: query }),
+            success: function(response) {
+                const users = response.data?.allUsers || [];
+                const $dropdown = $('#userId');
+                $dropdown.empty();
+
+                if (users.length > 0) {
+                    users.forEach(u => {
+                        $dropdown.append(`<option value="${u.id}">${u.fullname} (ID: ${u.id})</option>`);
+                    });
+                } else {
+                    $dropdown.append('<option value="">Chưa có User nào</option>');
+                }
+            },
+            error: function(xhr) {
+                console.error("Lỗi khi tải người dùng:", xhr.responseText);
+                $('#userId').empty().append('<option value="">Lỗi tải người dùng</option>');
+            }
+        });
+    }
+
+
+    // --- BẢNG HIỂN THỊ (READ) ---
+    function fetchAndRenderProducts() {
+        // Query cần lấy thêm ID của Category và User để phục vụ cho chức năng SỬA
+        const query = `{ productsByPriceAsc { id title price quantity description category { id name } user { id fullname } } }`;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: query }),
+            success: function(response) {
+                const products = response.data?.productsByPriceAsc || [];
+                let html = '';
+                
+                if (products.length === 0) 
+                {
+                    html = '<tr><td colspan="6" class="text-center">Không có sản phẩm nào.</td></tr>';
+                } 
+                else 
+                {
+                    products.forEach(p => 
+                    {
+                        const price = Number(p.price).toLocaleString('vi-VN');
+                        
+                        // Lấy đủ dữ liệu để truyền vào nút SỬA bằng data-product
+                        const productDataJson = JSON.stringify({
+                            id: p.id, title: p.title, price: p.price, quantity: p.quantity, 
+                            description: p.description, categoryId: p.category.id, userId: p.user.id
+                        });
+
+                        html += `
+                            <tr>
+                                <td>${p.id}</td>
+                                <td>${p.title}</td>
+                                <td>${price} VND</td>
+                                <td>${p.quantity}</td>
+                                <td>${p.category.name}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-warning edit-btn me-1" data-product='${productDataJson}'>Sửa</button>
+                                    <button class="btn btn-sm btn-danger delete-btn" data-id="${p.id}">Xóa</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+                $('#product-table-body').html(html);
+            },
+            error: function(xhr) 
+            {
+                console.error("Lỗi khi tải danh sách sản phẩm:", xhr.responseText);
+                $('#product-table-body').html('<tr><td colspan="6" class="text-danger text-center">Lỗi tải dữ liệu.</td></tr>');
+            }
+        });
+    }
+    
+    // --- XỬ LÝ CREATE VÀ UPDATE ---
+    $('#productForm').submit(function(e) 
+    {
+        e.preventDefault();
+        
+        const productId = $('#productId').val();
+        const isUpdating = productId !== ""; 
+
+        // Lấy dữ liệu từ form. Dùng Number() cho các trường số
+        const inputData = {
+            id: isUpdating ? Number(productId) : null,
+            title: $('#title').val(),
+            price: parseFloat($('#price').val()),
+            quantity: parseInt($('#quantity').val()),
+            description: $('#description').val(),
+            categoryId: Number($('#categoryId').val()), 
+            userId: Number($('#userId').val())
+        };
+        
+        // Chọn Mutation (createProduct hoặc updateProduct)
+        const operationName = isUpdating ? 'UpdateProduct' : 'CreateProduct';
+        const mutation = `
+            mutation ${operationName}($input: ProductInput!) 
+            {
+                ${operationName.toLowerCase()}(input: $input) 
+                {
+                    id
+                    title
+                }
+            }
+        `;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify
+            ({ 
+                query: mutation,
+                variables: { input: inputData } 
+            }),
+            success: function(response) 
+            {
+                if (response.errors) 
+                {
+                    // Xử lý lỗi validation từ Backend
+                    const validationError = response.errors[0].message || "Lỗi không xác định";
+                    showNotification('Lỗi Validation: ' + validationError, 'danger');
+                    console.error("Lỗi GraphQL:", response.errors);
+                    return;
+                }
+                
+                const successMsg = isUpdating ? "Cập nhật sản phẩm" : "Thêm sản phẩm";
+                showNotification(`${successMsg} "${response.data[operationName.toLowerCase()].title}" thành công!`);
+                
+                resetFormState();
+                fetchAndRenderProducts(); 
+            },
+            error: function(xhr) 
+            {
+                showNotification('Lỗi khi thực hiện thao tác. Kiểm tra console.', 'danger');
+                console.error("Lỗi AJAX:", xhr.responseText);
+            }
+        });
+    });
+
+    // --- XỬ LÝ XÓA (DELETE) ---
+    $(document).on('click', '.delete-btn', function() 
+    {
+        const productId = $(this).data('id');
+        if (!confirm(`Bạn có chắc chắn muốn xóa Sản phẩm ID: ${productId} không?`)) return;
+
+       
+        const mutation = `
+            mutation DeleteProduct($id: ID!) {
+                deleteProduct(id: $id)
+            }
+        `;
+
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ 
+                query: mutation,
+                variables: { id: productId.toString() } 
+            }),
+            success: function(response) 
+            {
+                if (response.data && response.data.deleteProduct === true) 
+                {
+                    showNotification(`Xóa sản phẩm ID: ${productId} thành công.`);
+                    fetchAndRenderProducts(); 
+                } else {
+                    showNotification(`Không tìm thấy hoặc không thể xóa sản phẩm ID: ${productId}.`, 'warning');
+                }
+            },
+            error: function(xhr) {
+                showNotification('Lỗi khi xóa sản phẩm. Kiểm tra console.', 'danger');
+            }
+        });
+    });
+
+    // --- XỬ LÝ SỬA (EDIT) ---
+    $(document).on('click', '.edit-btn', function() {
+        // Lấy dữ liệu sản phẩm từ thuộc tính data-product
+        const productData = $(this).data('product');
+        
+        // Điền dữ liệu vào Form
+        $('#productId').val(productData.id);
+        $('#title').val(productData.title);
+        $('#price').val(productData.price);
+        $('#quantity').val(productData.quantity);
+        $('#description').val(productData.description);
+        
+        // Chọn đúng giá trị trong Dropdown động
+        $('#categoryId').val(productData.categoryId);
+        $('#userId').val(productData.userId); 
+        
+        // Cập nhật giao diện Form
+        $('#form-header').text('Cập Nhật Sản Phẩm (ID: ' + productData.id + ')');
+        $('#submit-btn').text('Cập Nhật Sản Phẩm').removeClass('btn-success').addClass('btn-warning');
+        $('#cancel-edit-btn').removeClass('d-none');
+        
+        // Scroll lên đầu form
+        $('html, body').animate({ scrollTop: 0 }, 500);
+    });
+
+    // --- HỦY BỎ CHỈNH SỬA ---
+    $('#cancel-edit-btn').click(function() {
+        resetFormState();
+    });
+
+    // --- RESET TRẠNG THÁI FORM ---
+    function resetFormState() {
+        $('#productForm')[0].reset();
+        $('#productId').val('');
+        $('#form-header').text('Thêm Sản Phẩm Mới');
+        $('#submit-btn').text('Thêm Sản Phẩm').removeClass('btn-warning').addClass('btn-success');
+        $('#cancel-edit-btn').addClass('d-none');
+    }
+    
+    // --- KHỞI TẠO ---
+    $(function() 
+    {
+        // 1. Tải danh sách User và Category cho dropdown
+        fetchCategories();
+        fetchUsers();
+        
+        // 2. Tải danh sách sản phẩm
+        fetchAndRenderProducts();
+    });
+
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+package com.littlelotus.model;
+
+public class Category {
+
+}

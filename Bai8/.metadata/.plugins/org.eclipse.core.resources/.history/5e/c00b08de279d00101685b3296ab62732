@@ -1,0 +1,88 @@
+# src/main/resources/graphql/schema.graphqls
+
+# Các Kiểu dữ liệu (Types)
+type User {
+    id: ID!
+    fullname: String!
+    email: String!
+    phone: String
+    # ...
+}
+
+type Category {
+    id: ID!
+    name: String!
+    images: String
+    # ...
+}
+
+type Product {
+    id: ID!
+    title: String!
+    quantity: Int
+    description: String
+    price: Float!
+    user: User
+    category: Category
+}
+
+# Input cho các thao tác CRUD (tạo/cập nhật)
+# Dùng Float cho Price (trong Java là BigDecimal)
+input UserInput {
+    id: ID
+    fullname: String!
+    email: String!
+    password: String!
+    phone: String
+}
+
+input ProductInput {
+    id: ID
+    title: String!
+    quantity: Int
+    description: String
+    price: Float!
+    userId: ID!
+    categoryId: ID!
+}
+
+input CategoryInput {
+    id: ID
+    name: String!
+    images: String
+}
+
+# --- QUERY (ĐỌC DỮ LIỆU) ---
+type Query {
+    # Hiển thị tất cả product có price từ thấp đến cao
+    productsByPriceAsc: [Product!]!
+    
+    # Lấy tất cả product của 01 category
+    productsByCategory(categoryId: ID!): [Product!]!
+    
+    # CRUD - Read
+    allUsers: [User!]!
+    userById(id: ID!): User
+    allProducts: [Product!]!
+    productById(id: ID!): Product
+    allCategories: [Category!]!
+    categoryById(id: ID!): Category
+}
+
+# --- MUTATION (GHI DỮ LIỆU: CREATE/UPDATE/DELETE) ---
+type Mutation {
+    # CRUD - User
+    createUser(input: UserInput!): User!
+    updateUser(input: UserInput!): User!
+    deleteUser(id: ID!): Boolean!
+    
+    # CRUD - Product
+    createProduct(input: ProductInput!): Product!
+    updateProduct(input: ProductInput!): Product!
+    deleteProduct(id: ID!): Boolean!
+    
+    # CRUD - Category
+    createCategory(input: CategoryInput!): Category!
+    updateCategory(input: CategoryInput!): Category!
+    deleteCategory(id: ID!): Boolean!
+}

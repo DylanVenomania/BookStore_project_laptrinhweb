@@ -1,0 +1,117 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Trang chủ</a></li>
+                <li class="breadcrumb-item active" aria-current="page" id="breadcrumb-product-name">...</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row bg-white p-4 rounded shadow-sm" id="product-detail-container">
+    <div class="col-md-5">
+        <div class="border p-3 text-center bg-light">
+             <h1 class="text-secondary display-4">Ảnh Sách</h1>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <h2 id="product-title" class="text-primary fw-bold">Đang tải tên sản phẩm...</h2>
+        <p class="text-muted mb-1">ID: <span id="product-id">...</span></p>
+        <p class="text-muted mb-3">Người đăng: <span id="product-user">...</span></p>
+        
+        <h3 id="product-price" class="text-danger display-5 my-3">Đang tải giá...</h3>
+        
+        <div class="mb-4">
+            <span class="badge bg-secondary me-2">Danh mục: <span id="product-category">...</span></span>
+            <span class="badge bg-info">Số lượng: <span id="product-quantity">...</span></span>
+        </div>
+
+        <p class="lead" id="product-description-short">...</p>
+        
+        <div class="d-flex align-items-center mt-4">
+            <input type="number" value="1" min="1" class="form-control me-3" style="width: 80px;">
+            <button class="btn btn-success btn-lg me-2"><i class="fas fa-shopping-cart"></i> Thêm vào giỏ</button>
+            <button class="btn btn-primary btn-lg">Mua Ngay</button>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h4 class="mb-0">Mô tả chi tiết</h4>
+            </div>
+            <div class="card-body">
+                <p id="product-description-full" class="card-text text-secondary">...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const GRAPHQL_ENDPOINT = '/graphql';
+    
+    const productId = <%= request.getAttribute("productId") %>; 
+
+    function fetchProductDetail(id) {
+        const query = `
+            query ProductById($id: ID!) {
+                productById(id: $id) {
+                    id
+                    title
+                    price
+                    quantity
+                    description
+                    category { id name }
+                    user { id fullname }
+                }
+            }
+        `;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: query, variables: { id: id.toString() } }),
+            success: function(response) {
+                const p = response.data?.productById;
+                if (!p) {
+                    $('#product-detail-container').html('<div class="col-12 text-center text-danger">Không tìm thấy sản phẩm này.</div>');
+                    return;
+                }
+                
+                const price = Number(p.price).toLocaleString('vi-VN');
+
+                $('#product-id').text(p.id);
+                $('#product-title').text(p.title);
+                $('#breadcrumb-product-name').text(p.title);
+                $('#product-price').text(price + ' VND');
+                $('#product-category').text(p.category.name);
+                $('#product-quantity').text(p.quantity);
+                $('#product-user').text(p.user.fullname);
+                
+                
+                $('#product-description-short').text(p.description.substring(0, 150) + '...');
+                $('#product-description-full').text(p.description);
+
+         
+                document.title = p.title + ' - Little Lotus Book Store';
+            },
+            error: function(xhr) {
+                console.error("Lỗi khi tải chi tiết sản phẩm:", xhr.responseText);
+                $('#product-detail-container').html('<div class="col-12 text-center text-danger">Lỗi tải dữ liệu chi tiết sản phẩm.</div>');
+            }
+        });
+    }
+
+    $(function() {
+        if (productId) {
+            fetchProductDetail(productId);
+        }
+    });
+
+</script>

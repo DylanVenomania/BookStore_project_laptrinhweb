@@ -1,0 +1,281 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+
+<div class="container my-5">
+    <div id="alert-container" class="mb-3"></div>
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white" id="form-header">Thêm Người Dùng Mới</div>
+        <div class="card-body">
+            <form id="userForm">
+                <input type="hidden" id="userId" name="userId" value=""> 
+                <div class="row">
+                    <div class="mb-3 col-md-6">
+                        <label for="fullname" class="form-label">Họ và Tên</label>
+                        <input type="text" class="form-control" id="fullname" name="fullname" required>
+                    </div>
+                    <div class="mb-3 col-md-6">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <div class="mb-3 col-md-6">
+                        <label for="password" class="form-label">Mật khẩu</label>
+                        <input type="password" class="form-control" id="password" name="password" required> 
+                    </div>
+                    <div class="mb-3 col-md-6">
+                        <label for="phone" class="form-label">Số Điện Thoại</label>
+                        <input type="text" class="form-control" id="phone" name="phone">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success mt-2" id="submit-btn">Thêm Người Dùng</button>
+                <button type="button" class="btn btn-secondary mt-2 d-none" id="cancel-edit-btn">Hủy Bỏ</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header">Danh Sách Người Dùng</div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="userTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Họ và Tên</th>
+                            <th>Email</th>
+                            <th>SĐT</th>
+                            <th>Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userTableBody">
+                        <tr><td colspan="5" class="text-center">Đang tải dữ liệu...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const GRAPHQL_ENDPOINT = '/graphql'; 
+    const PASSWORD_FIELD = $('#password'); // Lưu tham chiếu đến trường mật khẩu
+
+    function showNotification(message, type) {
+        const alertHtml = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                              ${message}
+                              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                           </div>`;
+        $('#alert-container').html(alertHtml);
+        $('html, body').animate({ scrollTop: 0 }, 500);
+    }
+    
+    // Hàm chuẩn bị dữ liệu cho Mutation
+    function getUserInputData() {
+        const id = $('#userId').val() ? parseInt($('#userId').val()) : null;
+        return {
+            id: id,
+            fullname: $('#fullname').val(),
+            email: $('#email').val(),
+            // Chỉ gửi password nếu nó không rỗng
+            password: PASSWORD_FIELD.val() || undefined, 
+            phone: $('#phone').val()
+        };
+    }
+
+    // --- 1. READ: LẤY TẤT CẢ NGƯỜI DÙNG ---
+    function fetchAllUsers() {
+        // GraphQL Query: Lấy các trường cần thiết (không lấy password)
+        const query = `{
+            allUsers {
+                id
+                fullname
+                email
+                phone
+            }
+        }`;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: query }),
+            success: function(response) {
+                const users = response.data?.allUsers || [];
+                renderUserTable(users);
+            },
+            error: function(xhr) {
+                console.error("Lỗi khi tải người dùng:", xhr.responseText);
+                $('#userTableBody').html('<tr><td colspan="5" class="text-center text-danger">Lỗi khi tải dữ liệu người dùng.</td></tr>');
+            }
+        });
+    }
+
+    // Hàm render bảng
+    function renderUserTable(users) {
+        let html = '';
+        if (users.length === 0) {
+            html = '<tr><td colspan="5" class="text-center">Chưa có người dùng nào.</td></tr>';
+        } else {
+            users.forEach(user => {
+                // Chuẩn bị data cho nút Sửa (Không chứa mật khẩu)
+                const userDataForEdit = {
+                    id: user.id,
+                    fullname: user.fullname,
+                    email: user.email,
+                    phone: user.phone || ''
+                };
+
+                const userJson = JSON.stringify(userDataForEdit).replace(/"/g, '&quot;');
+                
+                html += `
+                    <tr>
+                        <td>${user.id}</td>
+                        <td>${user.fullname}</td>
+                        <td>${user.email}</td>
+                        <td>${user.phone || 'N/A'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning edit-btn me-2" data-user="${userJson}">Sửa</button>
+                            <button class="btn btn-sm btn-danger delete-btn" data-id="${user.id}">Xóa</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+        $('#userTableBody').html(html);
+    }
+    
+    // --- 2. CREATE/UPDATE: XỬ LÝ FORM SUBMISSION ---
+    $('#userForm').submit(function(e) {
+        e.preventDefault();
+        
+        const inputData = getUserInputData();
+        const isUpdate = inputData.id !== null;
+        let mutation, operationName;
+
+        if (isUpdate) {
+            mutation = `
+                mutation UpdateUser($input: UserInput!) {
+                    updateUser(input: $input) {
+                        id fullname
+                    }
+                }
+            `;
+            operationName = "UpdateUser";
+            // Nếu người dùng không nhập mật khẩu khi Sửa, không gửi trường password đi
+            if (!inputData.password) {
+                delete inputData.password;
+            }
+        } else {
+            mutation = `
+                mutation CreateUser($input: UserInput!) {
+                    createUser(input: $input) {
+                        id fullname
+                    }
+                }
+            `;
+            operationName = "CreateUser";
+            delete inputData.id;
+        }
+
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                query: mutation,
+                variables: { input: inputData },
+                operationName: operationName
+            }),
+            success: function(response) {
+                if (response.errors) {
+                    const errorMsg = response.errors[0]?.message || 'Lỗi không xác định trong quá trình xử lý.';
+                    showNotification(errorMsg, 'danger');
+                    console.error("GraphQL Errors:", response.errors);
+                    return;
+                }
+                
+                showNotification(`Người dùng ${isUpdate ? 'cập nhật' : 'thêm mới'} thành công!`, 'success');
+                resetFormState();
+                fetchAllUsers(); 
+            },
+            error: function(xhr) {
+                showNotification('Lỗi khi gửi yêu cầu. Kiểm tra kết nối API.', 'danger');
+                console.error("AJAX Error:", xhr.responseText);
+            }
+        });
+    });
+
+    // --- 3. DELETE: XỬ LÝ XÓA NGƯỜI DÙNG ---
+    $(document).on('click', '.delete-btn', function() {
+        const userId = parseInt($(this).data('id'));
+        if (!confirm('Bạn có chắc chắn muốn xóa người dùng ID: ' + userId + ' không?')) {
+            return;
+        }
+
+        const mutation = `
+            mutation DeleteUser($id: Long!) {
+                deleteUser(id: $id)
+            }
+        `;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                query: mutation,
+                variables: { id: userId },
+                operationName: "DeleteUser"
+            }),
+            success: function(response) {
+                if (response.data?.deleteUser === true) {
+                    showNotification(`Đã xóa người dùng ID: ${userId} thành công.`, 'success');
+                    fetchAllUsers(); 
+                } else {
+                    showNotification(`Không tìm thấy hoặc không thể xóa người dùng ID: ${userId}.`, 'warning');
+                }
+            },
+            error: function(xhr) {
+                showNotification('Lỗi khi xóa người dùng. Kiểm tra console.', 'danger');
+            }
+        });
+    });
+
+    // --- XỬ LÝ SỬA (EDIT) ---
+    $(document).on('click', '.edit-btn', function() {
+        const userData = $(this).data('user');
+        
+        $('#userId').val(userData.id);
+        $('#fullname').val(userData.fullname);
+        $('#email').val(userData.email);
+        $('#phone').val(userData.phone);
+        
+        // Mật khẩu không bắt buộc khi sửa, đặt placeholder
+        PASSWORD_FIELD.val('').removeAttr('required').attr('placeholder', 'Nhập mật khẩu mới (Nếu cần)');
+        
+        $('#form-header').text('Cập Nhật Người Dùng (ID: ' + userData.id + ')');
+        $('#submit-btn').text('Cập Nhật Người Dùng').removeClass('btn-success').addClass('btn-warning');
+        $('#cancel-edit-btn').removeClass('d-none');
+        
+        $('html, body').animate({ scrollTop: 0 }, 500);
+    });
+
+    // --- RESET TRẠNG THÁI FORM ---
+    $('#cancel-edit-btn').click(function() { resetFormState(); });
+    function resetFormState() {
+        $('#userForm')[0].reset();
+        $('#userId').val('');
+        $('#form-header').text('Thêm Người Dùng Mới');
+        // Đặt lại 'required' và xóa placeholder khi thêm mới
+        PASSWORD_FIELD.val('').attr('required', true).removeAttr('placeholder'); 
+        $('#submit-btn').text('Thêm Người Dùng').removeClass('btn-warning').addClass('btn-success');
+        $('#cancel-edit-btn').addClass('d-none');
+        $('#alert-container').empty(); 
+    }
+
+    // --- KHỞI TẠO ---
+    $(function() {
+        fetchAllUsers();
+    });
+
+</script>

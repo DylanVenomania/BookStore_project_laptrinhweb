@@ -1,0 +1,349 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Quản Lý Sản Phẩm - Admin</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body class="bg-light">
+
+<div class="container my-5">
+    <h1 class="mb-4 text-primary">Quản Lý Sản Phẩm</h1>
+
+    <div id="alert-container" class="mb-3"></div>
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">Thêm Sản Phẩm Mới</div>
+        <div class="card-body">
+            <form id="productForm">
+                <input type="hidden" id="productId" name="productId" value=""> 
+                <div class="row">
+                    <div class="mb-3 col-md-6">
+                        <label for="title" class="form-label">Tên Sản Phẩm</label>
+                        <input type="text" class="form-control" id="title" name="title" required>
+                    </div>
+                    <div class="mb-3 col-md-6">
+                        <label for="price" class="form-label">Giá (VND)</label>
+                        <input type="number" class="form-control" id="price" name="price" step="0.01" required>
+                    </div>
+                    <div class="mb-3 col-md-4">
+                        <label for="quantity" class="form-label">Số Lượng</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" required>
+                    </div>
+                    <div class="mb-3 col-md-4">
+                        <label for="categoryId" class="form-label">Danh Mục (ID)</label>
+                        <select class="form-select" id="categoryId" name="categoryId" required>
+                            <option value="1">Sách Khoa Học</option> 
+                        </select>
+                    </div>
+                    <div class="mb-3 col-md-4">
+                        <label for="userId" class="form-label">Người Đăng (ID)</label>
+                        <select class="form-select" id="userId" name="userId" required>
+                            <option value="1">Admin Little Lotus</option>
+                        </select>
+                    </div>
+                    <div class="mb-3 col-12">
+                        <label for="description" class="form-label">Mô Tả</label>
+                        <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success mt-2" id="submit-btn">Thêm Sản Phẩm</button>
+                <button type="button" class="btn btn-secondary mt-2 d-none" id="cancel-edit-btn">Hủy Bỏ</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white">Danh Sách Sản Phẩm</div>
+        <div class="card-body">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Tên Sản Phẩm</th>
+                        <th>Giá</th>
+                        <th>SL</th>
+                        <th>Danh Mục</th>
+                        <th>Hành Động</th>
+                    </tr>
+                </thead>
+                <tbody id="product-table-body">
+                    <tr><td colspan="6" class="text-center">Đang tải dữ liệu...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const GRAPHQL_ENDPOINT = '/graphql';
+    
+    // --- BẢNG HIỂN THỊ (READ) ---
+    function fetchAndRenderProducts() {
+        const query = `{ productsByPriceAsc { id title price quantity description category { id name } user { id fullname } } }`;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ query: query }),
+            success: function(response) {
+                const products = response.data?.productsByPriceAsc || [];
+                let html = '';
+                
+                if (products.length === 0) 
+                {
+                    html = '<tr><td colspan="6" class="text-center">Không có sản phẩm nào.</td></tr>';
+                } 
+                else 
+                {
+                    products.forEach(p => 
+                    {
+                        const price = Number(p.price).toLocaleString('vi-VN');
+                        html += `
+                            <tr>
+                                <td>${p.id}</td>
+                                <td>${p.title}</td>
+                                <td>${price} VND</td>
+                                <td>${p.quantity}</td>
+                                <td>${p.category.name}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-warning edit-btn me-1" data-id="${p.id}" data-product='${JSON.stringify(p)}'>Sửa</button>
+                                    <button class="btn btn-sm btn-danger delete-btn" data-id="${p.id}">Xóa</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+                $('#product-table-body').html(html);
+            },
+            error: function(xhr) 
+            {
+                console.error("Lỗi khi tải danh sách sản phẩm:", xhr.responseText);
+                $('#product-table-body').html('<tr><td colspan="6" class="text-danger text-center">Lỗi tải dữ liệu.</td></tr>');
+            }
+        });
+    }
+    
+    // --- HÀM THÔNG BÁO ---
+    function showNotification(message, type = 'success') 
+    {
+        const alertHtml = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>`;
+        $('#alert-container').html(alertHtml);
+        setTimeout(() => $('#alert-container').empty(), 5000);
+    }
+
+    // --- XỬ LÝ CREATE VÀ UPDATE ---
+    $('#productForm').submit(function(e) 
+    {
+        e.preventDefault();
+        
+        const productId = $('#productId').val();
+        const isUpdating = productId !== ""; // Nếu có productId, là UPDATE, ngược lại là CREATE
+
+        // Lấy dữ liệu từ form. Dùng Number() để đảm bảo kiểu dữ liệu là số nguyên/thực
+        const inputData = {
+            id: isUpdating ? Number(productId) : null,
+            title: $('#title').val(),
+            price: parseFloat($('#price').val()),
+            quantity: parseInt($('#quantity').val()),
+            description: $('#description').val(),
+            categoryId: Number($('#categoryId').val()), 
+            userId: Number($('#userId').val())
+        };
+        
+        // Chọn Mutation
+        const operationName = isUpdating ? 'UpdateProduct' : 'CreateProduct';
+        const mutation = `
+            mutation ${operationName}($input: ProductInput!) 
+            {
+                ${operationName.toLowerCase()}(input: $input) 
+                {
+                    id
+                    title
+                }
+            }
+        `;
+        
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify
+            ({ 
+                query: mutation,
+                variables: { input: inputData } 
+            }),
+            success: function(response) 
+            {
+                if (response.errors) 
+                {
+                    // Lấy lỗi validation từ Backend (nếu có)
+                    const validationError = response.errors[0].message || "Lỗi không xác định";
+                    showNotification('Lỗi Validation: ' + validationError, 'danger');
+                    console.error("Lỗi GraphQL:", response.errors);
+                    return;
+                }
+                
+                const successMsg = isUpdating ? "Cập nhật sản phẩm" : "Thêm sản phẩm";
+                showNotification(`${successMsg} "${response.data[operationName.toLowerCase()].title}" thành công!`);
+                
+                // Reset form và giao diện sau khi thành công
+                resetFormState();
+                fetchAndRenderProducts(); 
+            },
+            error: function(xhr) 
+            {
+                showNotification('Lỗi khi thực hiện thao tác. Kiểm tra console.', 'danger');
+                console.error("Lỗi AJAX:", xhr.responseText);
+            }
+        });
+    });
+
+    // --- XỬ LÝ XÓA (DELETE) ---
+    $(document).on('click', '.delete-btn', function() 
+    {
+        const productId = $(this).data('id');
+        if (!confirm(`Bạn có chắc chắn muốn xóa Sản phẩm ID: ${productId} không?`)) return;
+
+       
+        const mutation = `
+            mutation DeleteProduct($id: ID!) {
+                deleteProduct(id: $id)
+            }
+        `;
+
+        $.ajax({
+            url: GRAPHQL_ENDPOINT,
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ 
+                query: mutation,
+                variables: { id: productId.toString() } // GraphQL ID nên gửi là String
+            }),
+            success: function(response) 
+            {
+                // Kiểm tra data.deleteProduct phải là true
+                if (response.data && response.data.deleteProduct === true) 
+                {
+                    showNotification(`Xóa sản phẩm ID: ${productId} thành công.`);
+                    fetchAndRenderProducts(); 
+                } else {
+                    showNotification(`Không tìm thấy hoặc không thể xóa sản phẩm ID: ${productId}.`, 'warning');
+                }
+            },
+            error: function(xhr) {
+                showNotification('Lỗi khi xóa sản phẩm. Kiểm tra console.', 'danger');
+            }
+        });
+    });
+
+    // --- XỬ LÝ SỬA (EDIT) ---
+    $(document).on('click', '.edit-btn', function() {
+        // Lấy dữ liệu sản phẩm từ thuộc tính data-product
+        const productData = $(this).data('product');
+        
+        // Điền dữ liệu vào Form
+        $('#productId').val(productData.id);
+        $('#title').val(productData.title);
+        $('#price').val(productData.price);
+        $('#quantity').val(productData.quantity);
+        $('#description').val(productData.description);
+        // Do đang hardcode option, ta chỉ cần chọn giá trị
+        $('#categoryId').val(productData.category.id);
+        $('#userId').val(productData.user.id); 
+        
+        // Cập nhật nút Submit và hiển thị nút Hủy
+        $('#submit-btn').text('Cập Nhật Sản Phẩm').removeClass('btn-success').addClass('btn-warning');
+        $('#cancel-edit-btn').removeClass('d-none');
+        
+        // Scroll lên đầu form
+        $('html, body').animate({ scrollTop: $('#productForm').offset().top - 100 }, 500);
+    });
+
+    // --- HỦY BỎ CHỈNH SỬA ---
+    $('#cancel-edit-btn').click(function() {
+        resetFormState();
+    });
+
+    // --- RESET TRẠNG THÁI FORM ---
+    function resetFormState() {
+        $('#productForm')[0].reset();
+        $('#productId').val('');
+        $('#submit-btn').text('Thêm Sản Phẩm').removeClass('btn-warning').addClass('btn-success');
+        $('#cancel-edit-btn').addClass('d-none');
+    }
+    
+    // --- KHỞI TẠO ---
+    $(function() 
+    {
+    	// --- HÀM 1: TẢI CATEGORIES ĐỘNG (Mới) ---
+    	function fetchCategories() {
+    	    const query = `{ allCategories { id name } }`;
+
+    	    $.ajax({
+    	        url: GRAPHQL_ENDPOINT,
+    	        type: 'POST',
+    	        contentType: 'application/json',
+    	        data: JSON.stringify({ query: query }),
+    	        success: function(response) {
+    	            const categories = response.data?.allCategories || [];
+    	            const $dropdown = $('#categoryId');
+    	            $dropdown.empty(); // Xóa các option hardcode
+
+    	            if (categories.length > 0) {
+    	                categories.forEach(c => {
+    	                    $dropdown.append(`<option value="${c.id}">${c.name} (ID: ${c.id})</option>`);
+    	                });
+    	            } else {
+    	                $dropdown.append('<option value="">Chưa có Danh mục nào</option>');
+    	            }
+    	        },
+    	        error: function(xhr) {
+    	            console.error("Lỗi khi tải danh mục:", xhr.responseText);
+    	        }
+    	    });
+    	}
+
+    	// --- HÀM 2: TẢI USERS ĐỘNG (Mới) ---
+    	function fetchUsers() {
+    	    const query = `{ allUsers { id fullname } }`;
+
+    	    $.ajax({
+    	        url: GRAPHQL_ENDPOINT,
+    	        type: 'POST',
+    	        contentType: 'application/json',
+    	        data: JSON.stringify({ query: query }),
+    	        success: function(response) {
+    	            const users = response.data?.allUsers || [];
+    	            const $dropdown = $('#userId');
+    	            $dropdown.empty(); // Xóa các option hardcode
+
+    	            if (users.length > 0) {
+    	                users.forEach(u => {
+    	                    $dropdown.append(`<option value="${u.id}">${u.fullname} (ID: ${u.id})</option>`);
+    	                });
+    	            } else {
+    	                $dropdown.append('<option value="">Chưa có User nào</option>');
+    	            }
+    	        },
+    	        error: function(xhr) {
+    	            console.error("Lỗi khi tải người dùng:", xhr.responseText);
+    	        }
+    	    });
+        // Tải danh sách sản phẩm khi trang được tải
+        fetchAndRenderProducts();
+        
+        // TODO: Viết hàm fetchCategories và fetchUsers để tải dropdown động
+    });
+
+</script>
+</body>
+</html>

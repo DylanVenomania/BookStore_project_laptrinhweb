@@ -1,0 +1,214 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Little Lotus Book Store</title>
+    <!-- Thư viện jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .product-card {
+            border: none;
+            border-radius: 10px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            height: 100%; /* Đảm bảo chiều cao bằng nhau */
+        }
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+        .product-image-placeholder {
+            height: 200px;
+            background-color: #f8f9fa;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: #6c757d;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .price-text {
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 1.25rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <!-- Header & Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow">
+        <div class="container">
+            <a class="navbar-brand" href="/">Little Lotus Book Store</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="/">Trang Chủ</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="fetchAndRenderProductsByCategory(1); return false;">Sách Khoa Học</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="fetchAndRenderProductsByCategory(2); return false;">Tiểu Thuyết</a>
+                    </li>
+                </ul>
+                <a href="/admin/product" class="btn btn-outline-light">Quản Trị Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container my-5">
+        
+        <!-- Tiêu đề Sản phẩm -->
+        <h2 class="mb-4 text-center text-secondary" id="product-list-title">Tất Cả Sản Phẩm (Giá Tăng Dần)</h2>
+
+        <!-- Khung hiển thị Sản phẩm -->
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-4" id="product-list-container">
+            <!-- Sản phẩm sẽ được tải bằng AJAX và hiển thị ở đây -->
+            <div class="col-12 text-center text-muted">Đang tải sản phẩm...</div>
+        </div>
+
+    </div>
+
+    <script>
+        const GRAPHQL_ENDPOINT = '/graphql';
+
+        // --- Hàm tạo thẻ sản phẩm
+		function createProductCard(product) 
+        {
+		    const price = Number(product.price).toLocaleString('vi-VN');
+		    const productUrl = `/product/${product.id}`; 
+		
+		    return `
+		        <div class="col">
+		            <div class="card product-card shadow-sm">
+		                <a href="${productUrl}" class="text-decoration-none text-dark"> <div class="product-image-placeholder">${product.category.name}</div>
+		                    <div class="card-body d-flex flex-column">
+		                        <h5 class="card-title text-truncate" title="${product.title}">${product.title}</h5>
+		                        <p class="card-text text-muted small mb-1">ID: ${product.id} | SL: ${product.quantity}</p>
+		                        <div class="mt-auto">
+		                            <p class="price-text mt-3">${price} VND</p>
+		                            <a href="${productUrl}" class="btn btn-sm btn-primary w-100">Xem Chi Tiết</a>
+		                        </div>
+		                    </div>
+		                </a>
+		            </div>
+		        </div>
+		    `;
+		}
+
+        // --- Hàm hiển thị sản phẩm  
+        function renderProducts(products) 
+        {
+            const $container = $('#product-list-container');
+            $container.empty();
+
+            if (products.length === 0) {
+                $container.html('<div class="col-12 text-center text-muted">Không tìm thấy sản phẩm nào trong danh mục này.</div>');
+                return;
+            }
+
+            products.forEach(product => {
+                $container.append(createProductCard(product));
+            });
+        }
+        
+        // --- QUERY 1: Lấy tất cả sản phẩm (Giá thấp đến cao) ---
+        function fetchAllProductsByPriceAsc() {
+            $('#product-list-title').text('Tất Cả Sản Phẩm (Giá Tăng Dần)');
+            $('#product-list-container').html('<div class="col-12 text-center text-muted">Đang tải sản phẩm...</div>');
+
+            const query = `{ 
+                productsByPriceAsc { 
+                    id 
+                    title 
+                    price 
+                    quantity 
+                    category { name }
+                } 
+            }`;
+            
+            $.ajax({
+                url: GRAPHQL_ENDPOINT,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ query: query }),
+                success: function(response) {
+                    const products = response.data?.productsByPriceAsc || [];
+                    renderProducts(products);
+                },
+                error: function(xhr) {
+                    console.error("Lỗi khi tải tất cả sản phẩm:", xhr.responseText);
+                    $('#product-list-container').html('<div class="col-12 text-center text-danger">Lỗi kết nối hoặc lỗi server khi tải sản phẩm.</div>');
+                }
+            });
+        }
+
+        // --- QUERY 2: Lấy sản phẩm theo Category (ví dụ: khi nhấn vào link Category) ---
+        function fetchAndRenderProductsByCategory(categoryId) {
+            
+            $('#product-list-container').html('<div class="col-12 text-center text-muted">Đang tải sản phẩm theo danh mục...</div>');
+            
+            const query = `
+                query ProductsByCategory($id: Long!) {
+                    productsByCategory(categoryId: $id) {
+                        id
+                        title
+                        price
+                        quantity
+                        category { name }
+                    }
+                }
+            `;
+            
+            $.ajax({
+                url: GRAPHQL_ENDPOINT,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ 
+                    query: query,
+                    variables: { id: categoryId }
+                }),
+                success: function(response) {
+                    const products = response.data?.productsByCategory || [];
+                    
+                    if (products.length > 0) {
+                         $('#product-list-title').text('Sản Phẩm Danh Mục: ' + products[0].category.name);
+                    } else {
+                         $('#product-list-title').text('Sản Phẩm Danh Mục (ID: ' + categoryId + ')');
+                    }
+                    
+                    // Sắp xếp lại theo giá tăng dần trong Frontend (Vì query productsByCategory không có order)
+                    products.sort((a, b) => a.price - b.price);
+
+                    renderProducts(products);
+                },
+                error: function(xhr) {
+                    console.error("Lỗi khi tải sản phẩm theo category:", xhr.responseText);
+                    $('#product-list-container').html('<div class="col-12 text-center text-danger">Lỗi khi tải sản phẩm theo danh mục.</div>');
+                }
+            });
+        }
+
+        // --- KHỞI TẠO ---
+        $(function() 
+        {
+            // Tải danh sách sản phẩm mặc định khi trang web tải lần đầu
+            fetchAllProductsByPriceAsc();
+        });
+
+    </script>
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
